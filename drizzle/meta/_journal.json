@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794608818873,
+      "tag": "0000_create_inventory_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794609026888,
+      "tag": "0001_create_inventory_tables",
+      "breakpoints": true
+    }
+  ]
+}
