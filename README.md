@@ -57,6 +57,12 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Database
+
+For local PostgreSQL, the example connection string targets a shared database named `licoresyaaa`; create that database before running migrations. Each service owns its schema, such as `inventory`, `catalog`, or `commerce`.
+
+For Supabase, use the connection string provided by the project. Supabase's PostgreSQL database name remains `postgres`; `LicoresYaaa` is the project name, while service ownership is represented by PostgreSQL schemas.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
