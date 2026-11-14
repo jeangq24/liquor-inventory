@@ -234,6 +234,7 @@ describe('StockReservationService', () => {
 			harness.service.release('order-1', {
 				idempotencyKey: 'release-reservation-1',
 				reason: 'ORDER_CANCELLED',
+				performedBy: 'operator-1',
 			}),
 		).resolves.toEqual({ reservation: releasedReservation, items });
 		expect(harness.balanceRepository.adjustReserved).toHaveBeenCalledWith(

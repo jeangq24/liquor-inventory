@@ -49,6 +49,30 @@ export class StockBalanceRepository {
 			.where(eq(stockBalances.locationId, locationId));
 	}
 
+	getAvailability(locationId: string, variantIds: string[]) {
+		if (variantIds.length === 0) {
+			return Promise.resolve([]);
+		}
+
+		return this.db
+			.select({
+				id: stockBalances.id,
+				locationId: stockBalances.locationId,
+				variantId: stockBalances.variantId,
+				quantityOnHand: stockBalances.quantityOnHand,
+				quantityReserved: stockBalances.quantityReserved,
+				quantityAvailable: sql<number>`${stockBalances.quantityOnHand} - ${stockBalances.quantityReserved}`,
+				updatedAt: stockBalances.updatedAt,
+			})
+			.from(stockBalances)
+			.where(
+				and(
+					eq(stockBalances.locationId, locationId),
+					inArray(stockBalances.variantId, variantIds),
+				),
+			);
+	}
+
 	async ensureAndLock(
 		locationId: string,
 		variantIds: string[],
@@ -117,6 +141,27 @@ export class StockBalanceRepository {
 			.update(stockBalances)
 			.set({
 				quantityReserved: sql`${stockBalances.quantityReserved} + ${quantityDelta}`,
+				updatedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(stockBalances.locationId, locationId),
+					eq(stockBalances.variantId, variantId),
+				),
+			)
+			.returning();
+	}
+
+	adjustOnHand(
+		locationId: string,
+		variantId: string,
+		quantityDelta: number,
+		tx: DatabaseTransaction,
+	) {
+		return tx
+			.update(stockBalances)
+			.set({
+				quantityOnHand: sql`${stockBalances.quantityOnHand} + ${quantityDelta}`,
 				updatedAt: new Date(),
 			})
 			.where(
