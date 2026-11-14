@@ -11,18 +11,25 @@ import {
 	stockMovements,
 	stockReservationItems,
 	stockReservations,
+	stockReturnItems,
+	stockReturns,
 } from '../../infrastructure/database/schema/inventory.schema.js';
 import { StockBalanceRepository } from '../stock-balance/stock-balance.repository.js';
 import { StockMovementRepository } from '../stock-movement/stock-movement.repository.js';
+import { StockMovementService } from '../stock-movement/stock-movement.service.js';
+import { StockReturnRepository } from '../stock-return/stock-return.repository.js';
+import { StockReturnService } from '../stock-return/stock-return.service.js';
 import { StockReservationRepository } from './stock-reservation.repository.js';
 import { StockReservationService } from './stock-reservation.service.js';
 
 const testDatabaseUrl = process.env.POSTGRES_TEST_DATABASE_URL;
 
-describe.skipIf(!testDatabaseUrl)('StockReservation PostgreSQL concurrency', () => {
+	describe.skipIf(!testDatabaseUrl)('Inventory PostgreSQL concurrency and idempotency', () => {
 	let pool: Pool | undefined;
 	let db: ReturnType<typeof drizzle> | undefined;
 	let service: StockReservationService;
+	let movementService: StockMovementService;
+	let returnService: StockReturnService;
 	let locationIds: string[] = [];
 	let orderIds: string[] = [];
 
@@ -56,10 +63,37 @@ describe.skipIf(!testDatabaseUrl)('StockReservation PostgreSQL concurrency', () 
 			new StockBalanceRepository(db),
 			new StockMovementRepository(db),
 		);
+		const balanceRepository = new StockBalanceRepository(db);
+		const movementRepository = new StockMovementRepository(db);
+		movementService = new StockMovementService(movementRepository, balanceRepository);
+		returnService = new StockReturnService(
+			new StockReturnRepository(db),
+			balanceRepository,
+			movementRepository,
+		);
 	});
 
 	afterEach(async () => {
 		const connection = database();
+		if (locationIds.length > 0) {
+			const returns = await connection
+				.select({ id: stockReturns.id })
+				.from(stockReturns)
+				.where(inArray(stockReturns.locationId, locationIds));
+			const returnIds = returns.map(({ id }) => id);
+
+			await connection
+				.delete(stockMovements)
+				.where(inArray(stockMovements.locationId, locationIds));
+			if (returnIds.length > 0) {
+				await connection
+					.delete(stockReturnItems)
+					.where(inArray(stockReturnItems.stockReturnId, returnIds));
+				await connection
+					.delete(stockReturns)
+					.where(inArray(stockReturns.id, returnIds));
+			}
+		}
 
 		if (orderIds.length > 0) {
 			const reservations = await connection
@@ -68,9 +102,11 @@ describe.skipIf(!testDatabaseUrl)('StockReservation PostgreSQL concurrency', () 
 				.where(inArray(stockReservations.orderId, orderIds));
 			const reservationIds = reservations.map(({ id }) => id);
 
-			await connection
-				.delete(stockMovements)
-				.where(inArray(stockMovements.orderId, orderIds));
+			if (locationIds.length === 0) {
+				await connection
+					.delete(stockMovements)
+					.where(inArray(stockMovements.orderId, orderIds));
+			}
 			if (reservationIds.length > 0) {
 				await connection
 					.delete(stockReservationItems)
@@ -92,6 +128,121 @@ describe.skipIf(!testDatabaseUrl)('StockReservation PostgreSQL concurrency', () 
 
 		locationIds = [];
 		orderIds = [];
+	});
+
+	it('applies a concurrent stock entry retry once', async () => {
+		const stock = await createStock(0);
+		const input = {
+			locationId: stock.locationId,
+			idempotencyKey: `entry:${randomUUID()}`,
+			reason: 'RESTOCK',
+			performedBy: randomUUID(),
+			items: [{ variantId: stock.variantId, quantity: 5 }],
+		};
+
+		const results = await Promise.all([
+			movementService.registerEntry(input),
+			movementService.registerEntry(input),
+		]);
+		const [balance] = await database()
+			.select()
+			.from(stockBalances)
+			.where(
+				and(
+					eq(stockBalances.locationId, stock.locationId),
+					eq(stockBalances.variantId, stock.variantId),
+				),
+			);
+		const movements = await database()
+			.select()
+			.from(stockMovements)
+			.where(eq(stockMovements.locationId, stock.locationId));
+
+		expect(results[0]?.[0]?.id).toBe(results[1]?.[0]?.id);
+		expect(balance?.quantityOnHand).toBe(5);
+		expect(movements).toHaveLength(1);
+	});
+
+	it('prevents concurrent adjustments from taking physical stock below zero', async () => {
+		const stock = await createStock(1);
+		const results = await Promise.allSettled([
+			movementService.registerAdjustment({
+				locationId: stock.locationId,
+				idempotencyKey: `adjust:${randomUUID()}`,
+				reason: 'DAMAGED',
+				performedBy: randomUUID(),
+				direction: 'OUT',
+				items: [{ variantId: stock.variantId, quantity: 1 }],
+			}),
+			movementService.registerAdjustment({
+				locationId: stock.locationId,
+				idempotencyKey: `adjust:${randomUUID()}`,
+				reason: 'DAMAGED',
+				performedBy: randomUUID(),
+				direction: 'OUT',
+				items: [{ variantId: stock.variantId, quantity: 1 }],
+			}),
+		]);
+		const [balance] = await database()
+			.select()
+			.from(stockBalances)
+			.where(eq(stockBalances.locationId, stock.locationId));
+
+		expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+		const rejected = results.find((result) => result.status === 'rejected');
+		if (rejected?.status === 'rejected') {
+			expect(rejected.reason).toBeInstanceOf(ConflictException);
+		}
+		expect(balance?.quantityOnHand).toBe(0);
+	});
+
+	it('processes a concurrent return retry once and restocks only apt units', async () => {
+		const stock = await createStock(0);
+		const orderId = randomUUID();
+		orderIds.push(orderId);
+		const input = {
+			orderId,
+			locationId: stock.locationId,
+			idempotencyKey: `return:${randomUUID()}`,
+			reason: 'DELIVERY_FAILED',
+			receivedBy: randomUUID(),
+			items: [
+				{
+					variantId: stock.variantId,
+					quantityReceived: 3,
+					quantityRestockable: 2,
+					reason: 'ONE_UNIT_DAMAGED',
+				},
+			],
+		};
+
+		const results = await Promise.all([
+			returnService.registerReturn(input),
+			returnService.registerReturn(input),
+		]);
+		const [balance] = await database()
+			.select()
+			.from(stockBalances)
+			.where(
+				and(
+					eq(stockBalances.locationId, stock.locationId),
+					eq(stockBalances.variantId, stock.variantId),
+				),
+			);
+		const returns = await database()
+			.select()
+			.from(stockReturns)
+			.where(eq(stockReturns.orderId, orderId));
+		const movements = await database()
+			.select()
+			.from(stockMovements)
+			.where(eq(stockMovements.orderId, orderId));
+
+		expect(results[0]?.stockReturn.id).toBe(results[1]?.stockReturn.id);
+		expect(balance?.quantityOnHand).toBe(2);
+		expect(returns).toHaveLength(1);
+		expect(movements).toHaveLength(1);
+		expect(movements[0]?.quantity).toBe(2);
 	});
 
 	afterAll(async () => {
@@ -186,6 +337,7 @@ describe.skipIf(!testDatabaseUrl)('StockReservation PostgreSQL concurrency', () 
 		const releaseInput = {
 			idempotencyKey: `release:${randomUUID()}`,
 			reason: 'ORDER_CANCELLED',
+			performedBy: randomUUID(),
 		};
 
 		const results = await Promise.all([

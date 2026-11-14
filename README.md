@@ -63,6 +63,12 @@ For local PostgreSQL, the example connection string targets a shared database na
 
 For Supabase, use the connection string provided by the project. Supabase's PostgreSQL database name remains `postgres`; `LicoresYaaa` is the project name, while service ownership is represented by PostgreSQL schemas.
 
+## Internal Inventory API
+
+The OpenAPI document is served at `/docs`. All `/internal/v1/stock/*` routes require `Authorization: Bearer <INTERNAL_API_TOKEN>`. Write operations also require `X-Actor-Id`; the trusted backend caller may forward `X-Actor-Permissions` as a comma-separated permission list.
+
+Only the trusted Backoffice/BFF or service integration may hold `INTERNAL_API_TOKEN`. That caller must validate the Supabase JWT and resolve the actor's role permissions before forwarding the actor ID and permissions. Never expose the internal token to a browser. Configure a random secret in each trusted service environment; leave the example value empty until configured.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

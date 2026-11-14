@@ -7,6 +7,7 @@ import {
 	gte,
 	like,
 	lte,
+	sql,
 } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
@@ -39,6 +40,16 @@ export class StockMovementRepository {
 		private readonly db: NodePgDatabase,
 	) {}
 
+	transaction<T>(work: (tx: DatabaseTransaction) => Promise<T>) {
+		return this.db.transaction(work);
+	}
+
+	lockIdempotencyKey(idempotencyKey: string, tx: DatabaseTransaction) {
+		return tx.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended(${`stock-movement:${idempotencyKey}`}, 0))`,
+		);
+	}
+
 	createMany(movements: NewStockMovement[], tx: DatabaseTransaction) {
 		if (movements.length === 0) {
 			return Promise.resolve([]);
@@ -52,6 +63,14 @@ export class StockMovementRepository {
 			.select()
 			.from(stockMovements)
 			.where(like(stockMovements.idempotencyKey, `${prefix}%`));
+	}
+
+	getByStockReturnId(stockReturnId: string, tx?: DatabaseTransaction) {
+		const executor = tx ?? this.db;
+		return executor
+			.select()
+			.from(stockMovements)
+			.where(eq(stockMovements.stockReturnId, stockReturnId));
 	}
 
 	async getByIdempotencyKey(idempotencyKey: string) {

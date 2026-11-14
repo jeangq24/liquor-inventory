@@ -29,6 +29,7 @@ export interface ReserveStockInput {
 export interface ReleaseStockInput {
 	idempotencyKey: string;
 	reason: string;
+	performedBy: string;
 }
 
 export interface DispatchStockInput {
@@ -180,6 +181,9 @@ export class StockReservationService {
 		if (!input.reason.trim()) {
 			throw new BadRequestException('Release reason is required');
 		}
+		if (!input.performedBy.trim()) {
+			throw new BadRequestException('Operator identity is required');
+		}
 
 		const operationPrefix = this.movementIdempotencyPrefix(
 			'release',
@@ -195,7 +199,7 @@ export class StockReservationService {
 				'RELEASED',
 				operationPrefix,
 				input.reason,
-				null,
+				input.performedBy,
 				tx,
 			);
 			if (replay) {
@@ -213,7 +217,7 @@ export class StockReservationService {
 					'RELEASED',
 					operationPrefix,
 					input.reason,
-					null,
+					input.performedBy,
 					tx,
 				);
 				if (replayAfterLock) {
@@ -266,6 +270,7 @@ export class StockReservationService {
 					'RELEASE',
 					input.reason,
 					operationPrefix,
+					input.performedBy,
 				),
 				tx,
 			);
@@ -382,7 +387,14 @@ export class StockReservationService {
 	}
 
 	getByOrder(orderId: string) {
-		return this.reservationRepository.getByOrder(orderId);
+		return this.reservationRepository.getByOrder(orderId).then((reservations) =>
+			Promise.all(
+				reservations.map(async (reservation) => ({
+					reservation,
+					items: await this.reservationRepository.getItems(reservation.id),
+				})),
+			),
+		);
 	}
 
 	private async resolveReserveReplay(

@@ -131,6 +131,9 @@ Consultar movimientos	Sí	Sí	Sí
 Registrar entradas	Sí	Sí	Sí
 Registrar salidas	Sí	Sí	Sí
 Registrar ajustes	Sí	Sí	Sí
+Registrar devoluciones de inventario	Sí	Sí	No
+Liberar reservas	Sí	Sí	No
+Despachar reservas	Sí	Sí	Sí
 Consultar ubicaciones	Sí	Sí	Sí
 Administrar ubicaciones	Sí	Sí	No
 Pedidos			
@@ -146,7 +149,6 @@ Registrar pagos en efectivo	Sí	Sí	Sí
 Revisar comprobantes	Sí	Sí	No
 Aprobar transferencias	Sí	Sí	No
 Rechazar transferencias	Sí	Sí	No
-Registrar devoluciones	Sí	Sí	No
 Promociones			
 Consultar promociones	Sí	Sí	Sí
 Crear promociones	Sí	Sí	No
@@ -180,7 +182,15 @@ catalog.products.update	Actualizar productos.
 catalog.products.deactivate	Desactivar productos.
 inventory.stock.read	Consultar existencias.
 inventory.stock.adjust	Ajustar inventario.
+inventory.stock.reserve	Reservar existencias; permiso exclusivo de la integración Commerce.
+inventory.stock.release	Liberar una reserva activa.
+inventory.stock.dispatch	Despachar una reserva activa.
+inventory.stock.return	Registrar una devolución verificada físicamente.
 inventory.movements.read	Consultar movimientos.
+inventory.stock.reserve	Crear reservas de inventario.
+inventory.stock.release	Liberar reservas activas.
+inventory.stock.dispatch	Despachar reservas activas.
+inventory.stock.return	Registrar devoluciones verificadas físicamente.
 commerce.orders.read	Consultar pedidos.
 commerce.orders.update_status	Actualizar estados de pedidos.
 commerce.orders.cancel	Cancelar pedidos.
