@@ -69,6 +69,12 @@ The OpenAPI document is served at `/docs`. All `/internal/v1/stock/*` routes req
 
 Only the trusted Backoffice/BFF or service integration may hold `INTERNAL_API_TOKEN`. That caller must validate the Supabase JWT and resolve the actor's role permissions before forwarding the actor ID and permissions. Never expose the internal token to a browser. Configure a random secret in each trusted service environment; leave the example value empty until configured.
 
+## Catalog Client
+
+Configure `CATALOG_API_URL`, `CATALOG_SERVICE_TOKEN` and optionally `CATALOG_TIMEOUT_MS` (1 to 30000 ms, default 5000) before starting Inventory. The service token must match Catalog's `CATALOG_SERVICE_API_TOKEN`, contain at least 32 non-whitespace characters and remain server-side.
+
+`CatalogClientModule` exports the `CATALOG_CLIENT` injection token and its `getVariant` contract. It validates Catalog responses, retains `priceCop` as a decimal string, allows inactive variants to be resolved for historical use, and reports unavailable, missing or malformed responses as errors. Inventory stock workflows do not yet invoke the client; integrating those checks requires selecting the operations and preserving idempotent retries when Catalog is unavailable.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

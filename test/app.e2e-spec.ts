@@ -11,6 +11,8 @@ describe('AppController (e2e)', () => {
   beforeEach(async () => {
     process.env.DATABASE_URL ??= 'postgresql://localhost:5432/licoresyaaa_test';
     process.env.INTERNAL_API_TOKEN = 'e2e-internal-token';
+    vi.stubEnv('CATALOG_API_URL', 'http://localhost:3002');
+    vi.stubEnv('CATALOG_SERVICE_TOKEN', 'e2e-catalog-service-token-000000000');
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -70,5 +72,6 @@ describe('AppController (e2e)', () => {
 
   afterEach(async () => {
     await app.close();
+    vi.unstubAllEnvs();
   });
 });
