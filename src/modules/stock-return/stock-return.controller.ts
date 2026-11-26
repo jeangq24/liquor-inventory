@@ -9,11 +9,16 @@ import {
 } from '@nestjs/common';
 import {
 	ApiBearerAuth,
+	ApiBadRequestResponse,
+	ApiConflictResponse,
 	ApiCreatedResponse,
+	ApiForbiddenResponse,
 	ApiHeader,
 	ApiOkResponse,
 	ApiOperation,
+	ApiParam,
 	ApiTags,
+	ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { InternalPermissionGuard } from '../../common/guards/internal-permission.guard.js';
 import { InternalServiceAuthGuard } from '../../common/guards/internal-service-auth.guard.js';
@@ -23,12 +28,15 @@ import { RegisterStockReturnDto } from './dto/register-stock-return.dto.js';
 import { StockReturnResponseDto } from './dto/stock-return-response.dto.js';
 import { StockReturnService } from './stock-return.service.js';
 
-@ApiTags('Stock returns')
+@ApiTags('Devoluciones de inventario')
 @ApiBearerAuth('internal-service-token')
+@ApiUnauthorizedResponse({ description: 'Falta la credencial interna o el contexto del actor, o no son válidos.' })
+@ApiForbiddenResponse({ description: 'El solicitante no dispone del permiso requerido.' })
+@ApiBadRequestResponse({ description: 'Los datos de la solicitud no son válidos.' })
 @ApiHeader({
 	name: 'x-actor-permissions',
 	required: true,
-	description: 'Permissions resolved by the trusted caller after Supabase authorization',
+	description: 'Permisos separados por comas, resueltos por el servicio confiable tras la autorización.',
 })
 @UseGuards(InternalServiceAuthGuard, InternalPermissionGuard)
 @Controller('internal/v1/stock/returns')
@@ -37,9 +45,10 @@ export class StockReturnController {
 
 	@Post()
 	@RequirePermissions('inventory.stock.return')
-	@ApiHeader({ name: 'x-actor-id', required: true, description: 'Authenticated receiver UUID from the trusted caller' })
-	@ApiOperation({ summary: 'Register and process a physically verified return' })
-	@ApiCreatedResponse({ type: StockReturnResponseDto, description: 'Processed return with received and restockable quantities' })
+	@ApiHeader({ name: 'x-actor-id', required: true, description: 'UUID v4 de quien recibe la devolución, proporcionado por el servicio confiable.' })
+	@ApiOperation({ summary: 'Registrar y procesar una devolución verificada físicamente' })
+	@ApiCreatedResponse({ type: StockReturnResponseDto, description: 'Devolución procesada con cantidades recibidas y reintegrables.' })
+	@ApiConflictResponse({ description: 'La clave de idempotencia ya se utilizó con otros datos o la devolución no pudo procesarse.' })
 	async registerReturn(
 		@Body() body: RegisterStockReturnDto,
 		@ActorId(new ParseUUIDPipe({ version: '4' })) actorId: string,
@@ -79,8 +88,9 @@ export class StockReturnController {
 
 	@Get('orders/:orderId')
 	@RequirePermissions('inventory.stock.read')
-	@ApiOperation({ summary: 'Get verified returns for an order' })
-	@ApiOkResponse({ type: [StockReturnResponseDto], description: 'Return history for the order' })
+	@ApiOperation({ summary: 'Consultar las devoluciones verificadas de un pedido' })
+	@ApiParam({ name: 'orderId', description: 'Identificador UUID v4 del pedido.' })
+	@ApiOkResponse({ type: [StockReturnResponseDto], description: 'Historial de devoluciones del pedido.' })
 	async getByOrder(
 		@Param('orderId', new ParseUUIDPipe({ version: '4' })) orderId: string,
 	) {
