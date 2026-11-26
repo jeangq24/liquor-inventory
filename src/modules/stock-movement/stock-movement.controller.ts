@@ -9,11 +9,15 @@ import {
 } from '@nestjs/common';
 import {
 	ApiBearerAuth,
+	ApiBadRequestResponse,
+	ApiConflictResponse,
 	ApiCreatedResponse,
+	ApiForbiddenResponse,
 	ApiHeader,
 	ApiOkResponse,
 	ApiOperation,
 	ApiTags,
+	ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { InternalPermissionGuard } from '../../common/guards/internal-permission.guard.js';
 import { InternalServiceAuthGuard } from '../../common/guards/internal-service-auth.guard.js';
@@ -27,12 +31,15 @@ import {
 import { StockMovementResponseDto } from './dto/stock-movement-response.dto.js';
 import { StockMovementService } from './stock-movement.service.js';
 
-@ApiTags('Stock movements')
+@ApiTags('Movimientos de inventario')
 @ApiBearerAuth('internal-service-token')
+@ApiUnauthorizedResponse({ description: 'Falta la credencial interna o el contexto del actor, o no son válidos.' })
+@ApiForbiddenResponse({ description: 'El solicitante no dispone del permiso requerido.' })
+@ApiBadRequestResponse({ description: 'Los datos de la solicitud no son válidos.' })
 @ApiHeader({
 	name: 'x-actor-permissions',
 	required: true,
-	description: 'Permissions resolved by the trusted caller after Supabase authorization',
+	description: 'Permisos separados por comas, resueltos por el servicio confiable tras la autorización.',
 })
 @UseGuards(InternalServiceAuthGuard, InternalPermissionGuard)
 @Controller('internal/v1/stock/movements')
@@ -41,9 +48,10 @@ export class StockMovementController {
 
 	@Post('entries')
 	@RequirePermissions('inventory.stock.adjust')
-	@ApiHeader({ name: 'x-actor-id', required: true, description: 'Authenticated operator UUID from the trusted caller' })
-	@ApiOperation({ summary: 'Register a physical stock entry' })
-	@ApiCreatedResponse({ type: [StockMovementResponseDto], description: 'Created immutable IN movements' })
+	@ApiHeader({ name: 'x-actor-id', required: true, description: 'UUID v4 del operador proporcionado por el servicio confiable.' })
+	@ApiOperation({ summary: 'Registrar una entrada física de existencias' })
+	@ApiCreatedResponse({ type: [StockMovementResponseDto], description: 'Movimientos de entrada registrados.' })
+	@ApiConflictResponse({ description: 'La clave de idempotencia ya se utilizó con otros datos o no se pudo bloquear el balance.' })
 	async registerEntry(
 		@Body() body: StockChangeDto,
 		@ActorId(new ParseUUIDPipe({ version: '4' })) actorId: string,
@@ -63,9 +71,10 @@ export class StockMovementController {
 
 	@Post('adjustments')
 	@RequirePermissions('inventory.stock.adjust')
-	@ApiHeader({ name: 'x-actor-id', required: true, description: 'Authenticated operator UUID from the trusted caller' })
-	@ApiOperation({ summary: 'Register a justified stock adjustment' })
-	@ApiCreatedResponse({ type: [StockMovementResponseDto], description: 'Created immutable adjustment movements' })
+	@ApiHeader({ name: 'x-actor-id', required: true, description: 'UUID v4 del operador proporcionado por el servicio confiable.' })
+	@ApiOperation({ summary: 'Registrar un ajuste justificado de existencias' })
+	@ApiCreatedResponse({ type: [StockMovementResponseDto], description: 'Movimientos de ajuste registrados.' })
+	@ApiConflictResponse({ description: 'El ajuste excede las existencias disponibles o la clave de idempotencia ya se utilizó con otros datos.' })
 	async registerAdjustment(
 		@Body() body: RegisterStockAdjustmentDto,
 		@ActorId(new ParseUUIDPipe({ version: '4' })) actorId: string,
@@ -86,8 +95,8 @@ export class StockMovementController {
 
 	@Get()
 	@RequirePermissions('inventory.movements.read')
-	@ApiOperation({ summary: 'Query immutable stock movement history' })
-	@ApiOkResponse({ type: [StockMovementResponseDto], description: 'Filtered stock movement history' })
+	@ApiOperation({ summary: 'Consultar el historial de movimientos de inventario' })
+	@ApiOkResponse({ type: [StockMovementResponseDto], description: 'Historial de movimientos según los filtros solicitados.' })
 	async getHistory(@Query() filters: GetStockMovementHistoryDto) {
 		const movements = await this.movementService.getHistory(filters);
 		return movements.map((movement) => this.toResponse(movement));

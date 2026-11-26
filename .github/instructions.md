@@ -10,6 +10,7 @@ Antes de proponer arquitectura, crear módulos o escribir lógica de negocio, co
 4. **Distribución de Modelos de Datos:**
 5. **Política de Roles y Permisos:**
 6. **Modelo Físico de Migración Inicial:**
+7. **Referencia de servicios complementarios**
 
 ## Estándares y Buenas Prácticas en NestJS
 * **Tipado Estricto:** Prohibido el uso de `any`. Usa interfaces, tipos y genéricos explícitos.
