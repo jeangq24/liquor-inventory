@@ -11,11 +11,11 @@ export function configureApp(app: INestApplication) {
 	);
 
 	const swaggerConfig = new DocumentBuilder()
-		.setTitle('LicoresYaaa Inventory API')
-		.setDescription('Internal stock, reservation, movement, and return contracts.')
+		.setTitle('API de inventario de LicoresYaaa')
+		.setDescription('API interna para existencias, reservas, movimientos y devoluciones.')
 		.setVersion('1.0')
 		.addBearerAuth(
-			{ type: 'http', scheme: 'bearer', bearerFormat: 'Internal service token' },
+			{ type: 'http', scheme: 'bearer', bearerFormat: 'Token interno de servicio' },
 			'internal-service-token',
 		)
 		.build();

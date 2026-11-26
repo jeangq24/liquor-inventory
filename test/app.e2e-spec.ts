@@ -58,7 +58,12 @@ describe('AppController (e2e)', () => {
       .get('/docs-json')
       .expect(200)
       .expect((response) => {
+        expect(response.body.info.title).toBe('API de inventario de LicoresYaaa');
+        expect(response.body.info.description).toBe('API interna para existencias, reservas, movimientos y devoluciones.');
         expect(response.body.paths['/internal/v1/stock/availability']).toBeDefined();
+        expect(response.body.paths['/internal/v1/stock/availability'].get.summary).toBe(
+          'Consultar la disponibilidad de variantes en una ubicación',
+        );
         const entryOperation = response.body.paths['/internal/v1/stock/movements/entries'].post;
         expect(entryOperation.security).toEqual([
           { 'internal-service-token': [] },
@@ -67,7 +72,26 @@ describe('AppController (e2e)', () => {
           'x-actor-id',
         );
         expect(response.body.paths['/internal/v1/stock/returns']).toBeDefined();
+        expect(response.body.paths['/internal/v1/stock/reservations/{orderId}/release'].post.responses['201'].description).toBe(
+          'Reserva liberada.',
+        );
+        expect(response.body.components.schemas.RegisterStockReturnItemDto.properties.quantityRestockable.description).toBe(
+          'Unidades aptas para reintegrar; no puede superar la cantidad recibida.',
+        );
       });
+  });
+
+  it('serves the Swagger interface', () => {
+    return request(app.getHttpServer())
+      .get('/docs')
+      .expect('Content-Type', /html/)
+      .expect(200);
+  });
+
+  it('serves the Swagger initialization script', () => {
+    return request(app.getHttpServer())
+      .get('/docs/swagger-ui-init.js')
+      .expect(200);
   });
 
   afterEach(async () => {

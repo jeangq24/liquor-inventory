@@ -8,7 +8,7 @@ import {
 import { ApiProperty } from '@nestjs/swagger';
 
 export class GetStockAvailabilityDto {
-	@ApiProperty({ type: [String], description: 'Variant UUIDs, repeated or comma-separated' })
+	@ApiProperty({ type: [String], description: 'Entre 1 y 100 UUID v4 de variantes, en parámetros repetidos o separados por comas.' })
 	@Transform(({ value }: { value: unknown }) => {
 		if (Array.isArray(value)) {
 			return value.flatMap((entry) =>
@@ -23,19 +23,19 @@ export class GetStockAvailabilityDto {
 	@IsUUID('4', { each: true })
 	variantIds!: string[];
 
-	@ApiProperty()
+	@ApiProperty({ description: 'UUID v4 de la ubicación.' })
 	@IsUUID('4')
 	locationId!: string;
 }
 
 export class GetStockByLocationDto {
-	@ApiProperty()
+	@ApiProperty({ description: 'UUID v4 de la ubicación.' })
 	@IsUUID('4')
 	locationId!: string;
 }
 
 export class GetStockByVariantDto {
-	@ApiProperty()
+	@ApiProperty({ description: 'UUID v4 de la variante.' })
 	@IsUUID('4')
 	variantId!: string;
 }

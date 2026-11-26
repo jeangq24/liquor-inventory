@@ -9,11 +9,17 @@ import {
 } from '@nestjs/common';
 import {
 	ApiBearerAuth,
+	ApiBadRequestResponse,
+	ApiConflictResponse,
 	ApiCreatedResponse,
+	ApiForbiddenResponse,
 	ApiHeader,
+	ApiNotFoundResponse,
 	ApiOkResponse,
 	ApiOperation,
+	ApiParam,
 	ApiTags,
+	ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { InternalPermissionGuard } from '../../common/guards/internal-permission.guard.js';
 import { InternalServiceAuthGuard } from '../../common/guards/internal-service-auth.guard.js';
@@ -33,12 +39,15 @@ import {
 	type StockReservationResult,
 } from './stock-reservation.service.js';
 
-@ApiTags('Stock reservations')
+@ApiTags('Reservas de existencias')
 @ApiBearerAuth('internal-service-token')
+@ApiUnauthorizedResponse({ description: 'Falta la credencial interna o el contexto del actor, o no son válidos.' })
+@ApiForbiddenResponse({ description: 'El solicitante no dispone del permiso requerido.' })
+@ApiBadRequestResponse({ description: 'Los datos de la solicitud no son válidos.' })
 @ApiHeader({
 	name: 'x-actor-permissions',
 	required: true,
-	description: 'Permissions resolved by the trusted caller after Supabase authorization',
+	description: 'Permisos separados por comas, resueltos por el servicio confiable tras la autorización.',
 })
 @UseGuards(InternalServiceAuthGuard, InternalPermissionGuard)
 @Controller('internal/v1/stock/reservations')
@@ -47,8 +56,9 @@ export class StockReservationController {
 
 	@Post()
 	@RequirePermissions('inventory.stock.reserve')
-	@ApiOperation({ summary: 'Reserve stock for an order atomically' })
-	@ApiCreatedResponse({ type: StockReservationResponseDto, description: 'Active reservation and reserved items' })
+	@ApiOperation({ summary: 'Reservar existencias de un pedido de forma atómica' })
+	@ApiCreatedResponse({ type: StockReservationResponseDto, description: 'Reserva y cantidades asociadas.' })
+	@ApiConflictResponse({ description: 'No hay existencias suficientes, existe una reserva activa o la clave se usó con otros datos.' })
 	async reserve(@Body() body: ReserveStockDto) {
 		const result = await this.reservationService.reserve(body);
 		return this.toResponse(result);
@@ -56,9 +66,12 @@ export class StockReservationController {
 
 	@Post(':orderId/release')
 	@RequirePermissions('inventory.stock.release')
-	@ApiHeader({ name: 'x-actor-id', required: true, description: 'Authenticated operator UUID from the trusted caller' })
-	@ApiOperation({ summary: 'Release the active reservation for an order' })
-	@ApiOkResponse({ type: StockReservationResponseDto, description: 'Released reservation' })
+	@ApiHeader({ name: 'x-actor-id', required: true, description: 'UUID v4 del operador proporcionado por el servicio confiable.' })
+	@ApiParam({ name: 'orderId', description: 'Identificador UUID v4 del pedido.' })
+	@ApiOperation({ summary: 'Liberar la reserva activa de un pedido' })
+	@ApiCreatedResponse({ type: StockReservationResponseDto, description: 'Reserva liberada.' })
+	@ApiNotFoundResponse({ description: 'No se encontró una reserva para el pedido.' })
+	@ApiConflictResponse({ description: 'No hay una reserva activa, el balance es inconsistente o la clave se usó con otros datos.' })
 	async release(
 		@Param('orderId', new ParseUUIDPipe({ version: '4' })) orderId: string,
 		@Body() body: ReleaseStockDto,
@@ -74,9 +87,12 @@ export class StockReservationController {
 
 	@Post(':orderId/dispatch')
 	@RequirePermissions('inventory.stock.dispatch')
-	@ApiHeader({ name: 'x-actor-id', required: true, description: 'Authenticated operator UUID from the trusted caller' })
-	@ApiOperation({ summary: 'Dispatch the active reservation for an order' })
-	@ApiOkResponse({ type: StockReservationResponseDto, description: 'Dispatched reservation' })
+	@ApiHeader({ name: 'x-actor-id', required: true, description: 'UUID v4 del operador proporcionado por el servicio confiable.' })
+	@ApiParam({ name: 'orderId', description: 'Identificador UUID v4 del pedido.' })
+	@ApiOperation({ summary: 'Despachar la reserva activa de un pedido' })
+	@ApiCreatedResponse({ type: StockReservationResponseDto, description: 'Reserva despachada.' })
+	@ApiNotFoundResponse({ description: 'No se encontró una reserva para el pedido.' })
+	@ApiConflictResponse({ description: 'No hay una reserva activa, las cantidades son insuficientes o la clave se usó con otros datos.' })
 	async dispatch(
 		@Param('orderId', new ParseUUIDPipe({ version: '4' })) orderId: string,
 		@Body() body: DispatchStockDto,
@@ -91,8 +107,9 @@ export class StockReservationController {
 
 	@Get('orders/:orderId')
 	@RequirePermissions('inventory.stock.read')
-	@ApiOperation({ summary: 'Get reservation history for an order' })
-	@ApiOkResponse({ type: [StockReservationHistoryResponseDto], description: 'Reservation history for the order' })
+	@ApiOperation({ summary: 'Consultar el historial de reservas de un pedido' })
+	@ApiParam({ name: 'orderId', description: 'Identificador UUID v4 del pedido.' })
+	@ApiOkResponse({ type: [StockReservationHistoryResponseDto], description: 'Historial de reservas del pedido.' })
 	async getByOrder(
 		@Param('orderId', new ParseUUIDPipe({ version: '4' })) orderId: string,
 	) {

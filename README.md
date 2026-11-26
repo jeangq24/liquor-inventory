@@ -1,150 +1,135 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# LicoresYaaa Inventory
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Servicio de inventario de LicoresYaaa. Administra las cantidades físicas y reservadas por variante y ubicación, así como la trazabilidad de sus cambios. Los pedidos, pagos y precios pertenecen a otros servicios.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Alcance
 
-## Description
+- Consulta de balances y disponibilidad, calculada como cantidad física menos cantidad reservada.
+- Reserva, liberación y despacho de existencias por pedido.
+- Registro de entradas, ajustes e historial de movimientos.
+- Registro de devoluciones con cantidades recibidas y cantidades reintegrables.
+- Escrituras transaccionales y claves de idempotencia para las operaciones implementadas.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Inventory es responsable del esquema PostgreSQL `inventory`. Las variantes, pedidos y actores de otros dominios se representan mediante identificadores lógicos, sin claves foráneas entre servicios. El cliente de Catalog está implementado, pero los flujos de stock aún no lo utilizan para validar variantes.
 
-## Project setup
+## Tecnologías y estructura
 
-```bash
-$ pnpm install
+El proyecto utiliza Node.js, TypeScript, NestJS, PostgreSQL, Drizzle ORM y Drizzle Kit. Los contratos HTTP se validan con `class-validator` y `class-transformer`, se documentan con Swagger/OpenAPI y se prueban con Vitest y Supertest.
+
+```text
+src/
+  common/                   Guardas y contexto de seguridad interna
+  infrastructure/database/ Conexión y esquema Drizzle de inventory
+  modules/
+    catalog-client/         Cliente HTTP interno de Catalog
+    stock-balance/          Consultas de balances y disponibilidad
+    stock-movement/         Entradas, ajustes y movimientos
+    stock-reservation/      Reservas, liberaciones y despachos
+    stock-return/           Devoluciones
+drizzle/                   Migraciones y metadatos de Drizzle
+test/                      Pruebas HTTP de extremo a extremo
+.github/                   Documentos técnicos del proyecto
 ```
 
-## Compile and run the project
+## Requisitos previos
 
-```bash
-# development
-$ pnpm run start
+- Node.js compatible con las dependencias del proyecto y `pnpm`.
+- PostgreSQL accesible y una base de datos creada para el entorno local.
+- URL y credencial de servicio de Catalog para la configuración del cliente.
 
-# watch mode
-$ pnpm run start:dev
+## Instalación y configuración local
 
-# production mode
-$ pnpm run start:prod
+Desde la raíz del repositorio:
+
+```powershell
+pnpm install
+Copy-Item .env.example .env
 ```
 
-## Run tests
+Configura las variables de `.env` para tu entorno. No incluyas credenciales reales en el repositorio. Después ejecuta las migraciones y arranca el servicio:
 
-```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+```powershell
+pnpm run db:migrate
+pnpm run start:dev
 ```
 
-## Database
+Por defecto, la aplicación escucha en el puerto `3000`. Las variables de entorno del proceso también pueden proporcionarse mediante el entorno de ejecución.
 
-For local PostgreSQL, the example connection string targets a shared database named `licoresyaaa`; create that database before running migrations. Each service owns its schema, such as `inventory`, `catalog`, or `commerce`.
+### Variables de entorno
 
-For Supabase, use the connection string provided by the project. Supabase's PostgreSQL database name remains `postgres`; `LicoresYaaa` is the project name, while service ownership is represented by PostgreSQL schemas.
+| Variable | Propósito |
+| --- | --- |
+| `DATABASE_URL` | Conexión PostgreSQL del servicio. El ejemplo local utiliza la base compartida `licoresyaaa`. |
+| `INTERNAL_API_TOKEN` | Credencial bearer que protege las rutas internas. Si falta, las solicitudes internas son rechazadas. |
+| `CATALOG_API_URL` | URL base HTTP o HTTPS de Catalog; es obligatoria al iniciar Inventory. |
+| `CATALOG_SERVICE_TOKEN` | Token de servicio enviado a Catalog; debe coincidir con `CATALOG_SERVICE_API_TOKEN` de Catalog y tener al menos 32 caracteres sin espacios. |
+| `CATALOG_TIMEOUT_MS` | Tiempo máximo de espera de Catalog en milisegundos; opcional, de 1 a 30000. Valor predeterminado: 5000. |
+| `PORT` | Puerto HTTP de Inventory; opcional, con valor predeterminado `3000`. |
+| `POSTGRES_TEST_DATABASE_URL` | Conexión opcional a una base PostgreSQL dedicada y desechable para pruebas de concurrencia. Debe estar disponible como variable del proceso al ejecutar las pruebas. |
 
-## Internal Inventory API
+El token de Catalog y `INTERNAL_API_TOKEN` son credenciales entre servicios: no deben exponerse al navegador.
 
-The OpenAPI document is served at `/docs`. All `/internal/v1/stock/*` routes require `Authorization: Bearer <INTERNAL_API_TOKEN>`. Write operations also require `X-Actor-Id`; the trusted backend caller may forward `X-Actor-Permissions` as a comma-separated permission list.
+## Comandos
 
-Only the trusted Backoffice/BFF or service integration may hold `INTERNAL_API_TOKEN`. That caller must validate the Supabase JWT and resolve the actor's role permissions before forwarding the actor ID and permissions. Never expose the internal token to a browser. Configure a random secret in each trusted service environment; leave the example value empty until configured.
+| Comando | Uso |
+| --- | --- |
+| `pnpm run start` | Iniciar la aplicación. |
+| `pnpm run start:dev` | Iniciar la aplicación con observación de cambios. |
+| `pnpm run start:debug` | Iniciar la aplicación en modo de depuración con observación de cambios. |
+| `pnpm run build` | Compilar la aplicación en `dist/`. |
+| `pnpm run start:prod` | Ejecutar la aplicación compilada. |
+| `pnpm run lint` | Analizar código fuente y pruebas con Oxlint. |
+| `pnpm run format` | Aplicar Prettier a los archivos TypeScript de `src/` y `test/`. |
+| `pnpm run test` | Ejecutar las pruebas unitarias y las pruebas PostgreSQL habilitadas. |
+| `pnpm run test:watch` | Ejecutar Vitest en modo de observación. |
+| `pnpm run test:cov` | Ejecutar las pruebas con cobertura. |
+| `pnpm run test:debug` | Ejecutar las pruebas en modo de depuración. |
+| `pnpm run test:e2e` | Ejecutar las pruebas HTTP de extremo a extremo. |
+| `pnpm run test:concurrency` | Ejecutar la suite PostgreSQL de concurrencia e idempotencia. |
+| `pnpm run db:generate` | Generar migraciones Drizzle a partir de cambios en el esquema TypeScript. |
+| `pnpm run db:migrate` | Aplicar las migraciones pendientes. |
 
-## Catalog Client
+La suite de concurrencia se omite si `POSTGRES_TEST_DATABASE_URL` no está definida. Aplica migraciones y elimina registros de prueba: utiliza exclusivamente una base de pruebas dedicada, nunca una base de desarrollo compartida o de producción.
 
-Configure `CATALOG_API_URL`, `CATALOG_SERVICE_TOKEN` and optionally `CATALOG_TIMEOUT_MS` (1 to 30000 ms, default 5000) before starting Inventory. The service token must match Catalog's `CATALOG_SERVICE_API_TOKEN`, contain at least 32 non-whitespace characters and remain server-side.
+## Migraciones
 
-`CatalogClientModule` exports the `CATALOG_CLIENT` injection token and its `getVariant` contract. It validates Catalog responses, retains `priceCop` as a decimal string, allows inactive variants to be resolved for historical use, and reports unavailable, missing or malformed responses as errors. Inventory stock workflows do not yet invoke the client; integrating those checks requires selecting the operations and preserving idempotent retries when Catalog is unavailable.
+Drizzle Kit lee la configuración de `drizzle.config.ts`, las definiciones de `src/infrastructure/database/schema/` y el historial de `drizzle/`. Las migraciones iniciales crean el esquema `inventory` y sus tablas, tipos, restricciones e índices.
 
-## Deployment
+Para un cambio de esquema, genera y revisa una migración nueva antes de aplicarla:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+```powershell
+pnpm run db:generate
+pnpm run db:migrate
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+No edites migraciones que ya hayan sido aplicadas. La existencia previa de un objeto no garantiza que su definición coincida con el modelo; revisa cualquier diferencia antes de aplicar cambios sobre una base existente. La configuración actual no establece un historial de migraciones independiente por servicio: su coordinación en una base compartida está pendiente de confirmar.
 
-## Observability
+## API interna
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+La documentación Swagger está disponible en `http://localhost:3000/docs` y el documento OpenAPI en `http://localhost:3000/docs-json`, ajustando el puerto si se configuró `PORT`.
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+Las rutas de stock requieren `Authorization: Bearer <INTERNAL_API_TOKEN>` y el permiso correspondiente en `X-Actor-Permissions`, separado por comas. Las entradas, ajustes, liberaciones, despachos y devoluciones requieren además `X-Actor-Id` con el UUID v4 del responsable.
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+| Método | Ruta | Permiso |
+| --- | --- | --- |
+| `GET` | `/internal/v1/stock/availability` | `inventory.stock.read` |
+| `GET` | `/internal/v1/stock/balances` | `inventory.stock.read` |
+| `GET` | `/internal/v1/stock/variants/:variantId` | `inventory.stock.read` |
+| `POST` | `/internal/v1/stock/reservations` | `inventory.stock.reserve` |
+| `POST` | `/internal/v1/stock/reservations/:orderId/release` | `inventory.stock.release` |
+| `POST` | `/internal/v1/stock/reservations/:orderId/dispatch` | `inventory.stock.dispatch` |
+| `GET` | `/internal/v1/stock/reservations/orders/:orderId` | `inventory.stock.read` |
+| `POST` | `/internal/v1/stock/movements/entries` | `inventory.stock.adjust` |
+| `POST` | `/internal/v1/stock/movements/adjustments` | `inventory.stock.adjust` |
+| `GET` | `/internal/v1/stock/movements` | `inventory.movements.read` |
+| `POST` | `/internal/v1/stock/returns` | `inventory.stock.return` |
+| `GET` | `/internal/v1/stock/returns/orders/:orderId` | `inventory.stock.read` |
 
-To add it to this project, run this and approve the code it prints at [observe.nestjs.com/link](https://observe.nestjs.com/link) - signing up for free if you have no account:
+El servicio confía en que el llamador interno valide la identidad y resuelva los permisos antes de enviar el contexto del actor. Inventory verifica el token y los permisos recibidos, pero no verifica directamente el JWT de Supabase ni la existencia del actor. Las rutas y credenciales internas deben mantenerse fuera del acceso directo de navegadores.
 
-```bash
-$ npx @nestjs/observe link
-```
+## Integraciones y mantenimiento
 
-It installs `@nestjs/observe`, wires it into `AppModule` and `main.ts`, and writes the app key and secret into `.env`, which every `nest start` script (`start`, `start:dev`, `start:debug`) then loads. In production, set `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` in the environment instead.
-
-Or do it by hand:
-
-```bash
-$ pnpm install @nestjs/observe
-```
-
-Then follow the [setup guide](https://docs.nestjs.com/observability/sdk) - it takes a single import and an app key.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Commerce puede consumir los contratos HTTP internos para coordinar operaciones sin escribir directamente las tablas de Inventory.
+- `CatalogClientModule` expone el cliente por el token `CATALOG_CLIENT`. Consulta `GET /internal/v1/variants/:id`, valida las respuestas y permite resolver variantes inactivas; los casos de uso de stock todavía no invocan este cliente.
+- El esquema incluye ubicaciones, pero no hay una ruta implementada para crearlas. Debe existir una ubicación antes de registrar balances que la referencien.
+- Los movimientos se registran mediante inserciones y los repositorios implementados no exponen actualización ni eliminación de movimientos. La protección mediante permisos de base de datos debe configurarse en el entorno de despliegue.
